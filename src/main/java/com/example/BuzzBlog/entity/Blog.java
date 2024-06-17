@@ -1,6 +1,7 @@
 package com.example.BuzzBlog.entity;
 
 import jakarta.persistence.*;
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -8,19 +9,15 @@ public class Blog {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(nullable = false)
     private String title;
-
-    @Column(nullable = false)
     private String body;
 
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
         name = "blog_tags",
         joinColumns = @JoinColumn(name = "blogId"),
         inverseJoinColumns = @JoinColumn(name = "tagId"))
-    private List<Tag> tags;
+    private List<Tag> tags = new ArrayList<>();
 
     // Getters and Setters
     public Long getId() {

@@ -5,9 +5,11 @@ import com.example.BuzzBlog.entity.Blog;
 import com.example.BuzzBlog.entity.Tag;
 import com.example.BuzzBlog.entity.TagClosure;
 import com.example.BuzzBlog.exception.ResourceNotFoundException;
+import com.example.BuzzBlog.mapper.BlogMapper;
 import com.example.BuzzBlog.repository.BlogRepository;
 import com.example.BuzzBlog.repository.TagClosureRepository;
 import com.example.BuzzBlog.repository.TagRepository;
+import org.hibernate.Hibernate;
 import org.modelmapper.ModelMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,7 +40,7 @@ public class BlogService {
     private TagClosureRepository tagClosureRepository;
 
     @Autowired
-    private ModelMapper modelMapper;
+    private BlogMapper blogMapper;
 
     @Transactional
     public BlogDTO createBlog(BlogDTO blogDTO) {
@@ -60,13 +62,13 @@ public class BlogService {
 
         updateTagHierarchy(tags);
 
-        BlogDTO savedBlogDTO = modelMapper.map(savedBlog, BlogDTO.class);
-        savedBlogDTO.setTags(savedBlog.getTags().stream().map(Tag::getName).collect(Collectors.toList()));
+        BlogDTO savedBlogDTO = blogMapper.toDTO(savedBlog);
         return savedBlogDTO;
     }
 
     @Async
     @Cacheable("blogsByTag")
+    @Transactional(readOnly = true)
     public CompletableFuture<List<BlogDTO>> getBlogsByTagAsync(String tagName, Pageable pageable) {
         logger.info("Fetching blogs for tag: {}", tagName);
         Tag tag = tagRepository.findByName(tagName).orElseThrow(() -> {
@@ -75,13 +77,14 @@ public class BlogService {
         });
         Page<Blog> blogsPage = blogRepository.findByTagId(tag.getId(), pageable);
         List<BlogDTO> blogDTOs = blogsPage.stream()
-                                          .map(blog -> {
-                                              BlogDTO blogDTO = modelMapper.map(blog, BlogDTO.class);
-                                              blogDTO.setTags(blog.getTags().stream().map(Tag::getName).collect(Collectors.toList()));
-                                              return blogDTO;
-                                          })
+                                          .map(this::initializeAndMapBlog)
                                           .collect(Collectors.toList());
         return CompletableFuture.completedFuture(blogDTOs);
+    }
+
+    private BlogDTO initializeAndMapBlog(Blog blog) {
+        Hibernate.initialize(blog.getTags());
+        return blogMapper.toDTO(blog);
     }
 
     private void updateTagHierarchy(List<Tag> tags) {
